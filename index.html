@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H.264 NALU 分析器</title>
+    <link rel="icon" href="./nalu.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="./nalu.svg" alt="NALU分析器" class="logo">
+            <h1>H.264 NALU 分析器</h1>
+        </div>
+
+        <div class="upload-section expanded" id="uploadSection">
+            <input type="file" id="fileInput" accept=".264,.h264" style="display: none;">
+            <div class="drop-text">
+                <strong>拖放 H.264 文件到这里</strong>
+                <span>或者</span>
+            </div>
+            <div class="file-actions initial-actions">
+                <button class="control-button" onclick="document.getElementById('fileInput').click()">
+                    <span>选择文件</span>
+                </button>
+                <button class="control-button info" onclick="loadSampleFile()">
+                    <span>加载示例</span>
+                </button>
+            </div>
+            <div class="file-info" style="display: none;">
+                <div class="file-info-group">
+                    <div class="file-info-item">
+                        <span class="file-info-label">文件名：</span>
+                        <span class="file-info-value file-name"></span>
+                    </div>
+                    <div class="file-info-item">
+                        <span class="file-info-label">大小：</span>
+                        <span class="file-info-value file-size"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="file-actions clear-action">
+                <button id="clearFile" class="control-button danger" style="display: none;">
+                    <span>清空文件</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="nalu-sequence-panel" id="naluSequencePanel" style="display: none;">
+            <div class="nalu-sequence-header">
+                <h3>NALU 分析</h3>
+                <div class="nalu-sequence-controls">
+                    <div class="nalu-sequence-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="sizeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span>显示大小</span>
+                    </div>
+                    <div class="nalu-sequence-stats">
+                        平均 IDR 间距: <span id="avgIdrInterval">-</span> 帧
+                    </div>
+                </div>
+            </div>
+            <div class="nalu-sequence-overview" id="naluStatsContent">
+            </div>
+            <div class="nalu-sequence-content" id="naluSequenceContent">
+            </div>
+        </div>
+
+        <div class="h264-analysis">
+            <div class="nalu-info-panel">
+                <div class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="nalu-info-header">
+                    <h3>NALU 信息</h3>
+                    <div class="nalu-navigation">
+                        <button id="prevNalu" class="control-button">上一个</button>
+                        <span class="nalu-counter">NALU: <span id="naluCounter">0/0</span></span>
+                        <button id="nextNalu" class="control-button">下一个</button>
+                    </div>
+                </div>
+                <div id="naluInfo">
+                    <div class="nalu-type">未选择 NALU</div>
+                    <div class="nalu-details"></div>
+                </div>
+            </div>
+
+            <div class="hex-viewer">
+                <div class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="hex-viewer-header">
+                    <h3>十六进制查看器</h3>
+                </div>
+                <div class="hex-content" id="hexContent"></div>
+            </div>
+        </div>
+        <footer class="footer">
+            <div class="footer-links">
+                <a href="https://github.com/wbxl2000/h264-nalu-viewer" target="_blank" class="footer-link github-link">
+                    <img src="./github.svg" alt="GitHub" class="footer-icon">
+                    <span>github.com/wbxl2000/h264-nalu-viewer</span>
+                </a>
+                <a href="https://x.com/wbxl2000" target="_blank" class="footer-link x-link">
+                    <img src="./x.svg" alt="X" class="footer-icon">
+                    <span>x.com/wbxl2000</span>
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // NALU 类型常量
+        const NALU_TYPES = {
+            1: { name: "非IDR图像片", color: "var(--success-color)", description: "非关键帧" },
+            5: { name: "IDR图像片", color: "var(--primary-color)", description: "关键帧" },
+            6: { name: "SEI", color: "var(--info-color)", description: "补充增强信息" },
+            7: { name: "SPS", color: "var(--danger-color)", description: "序列参数集" },
+            8: { name: "PPS", color: "var(--warning-color)", description: "图像参数集" },
+            9: { name: "分隔符", color: "var(--dark-color)", description: "访问单元分隔符" },
+            10: { name: "序列结束", color: "var(--secondary-color)", description: "序列结束符" },
+            11: { name: "码流结束", color: "var(--disabled-color)", description: "码流结束符" },
+            12: { name: "填充", color: "var(--border-color)", description: "填充数据" }
+        };
+
+        // 十六进制显示用的简化NALU类型
+        const HEX_NALU_TYPES = {
+            1: "非IDR",
+            5: "IDR",
+            6: "SEI",
+            7: "SPS",
+            8: "PPS",
+            9: "AUD",
+            10: "EOS",
+            11: "EOB",
+            12: "FIL"
+        };
+
+        // 全局状态
+        let currentNALUs = [];
+        let currentNALUIndex = -1;
+        let fileData = null;
+
+        // 文件处理相关函数
+        function formatFileSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return `${size.toFixed(1)} ${units[unitIndex]}`;
+        }
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.264') && !file.name.endsWith('.h264')) {
+                alert('请选择 .264 或 .h264 文件');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                fileData = new Uint8Array(e.target.result);
+                processH264File();
+            };
+            reader.readAsArrayBuffer(file);
+
+            // 更新UI显示
+            document.querySelector('.file-name').textContent = file.name;
+            document.querySelector('.file-size').textContent = formatFileSize(file.size);
+            document.querySelector('.file-info').style.display = 'block';
+            document.getElementById('clearFile').style.display = 'inline-block';
+            document.getElementById('uploadSection').classList.add('has-file');
+        }
+
+        function clearFile() {
+            fileData = null;
+            currentNALUs = [];
+            currentNALUIndex = -1;
+
+            document.querySelector('.file-name').textContent = '';
+            document.querySelector('.file-size').textContent = '';
+            document.querySelector('.file-info').style.display = 'none';
+            document.getElementById('clearFile').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('naluInfo').innerHTML = '<div class="nalu-type">未选择 NALU</div>';
+            document.getElementById('hexContent').innerHTML = '';
+            document.getElementById('naluCounter').textContent = '0/0';
+            document.getElementById('uploadSection').classList.remove('has-file');
+            document.getElementById('naluSequencePanel').style.display = 'none';
+            // 清理tooltip
+            const tooltip = document.querySelector('.nalu-sequence-tooltip');
+            if (tooltip) {
+                tooltip.remove();
+            }
+        }
+
+        // NALU 处理相关函数
+        function processH264File() {
+            if (!fileData) return;
+
+            const nalus = [];
+            let currentIndex = 0;
+
+            // NALU统计对象
+            const naluStats = {};
+            Object.keys(NALU_TYPES).forEach(type => {
+                naluStats[type] = 0;
+            });
+
+            while (currentIndex < fileData.length) {
+                // 查找起始码
+                let startCodeLength = 0;
+                if (currentIndex + 4 <= fileData.length &&
+                    fileData[currentIndex] === 0x00 &&
+                    fileData[currentIndex + 1] === 0x00 &&
+                    fileData[currentIndex + 2] === 0x00 &&
+                    fileData[currentIndex + 3] === 0x01) {
+                    startCodeLength = 4;
+                } else if (currentIndex + 3 <= fileData.length &&
+                    fileData[currentIndex] === 0x00 &&
+                    fileData[currentIndex + 1] === 0x00 &&
+                    fileData[currentIndex + 2] === 0x01) {
+                    startCodeLength = 3;
+                }
+
+                if (startCodeLength > 0) {
+                    // 找到下一个起始码
+                    let nextStartIndex = currentIndex + startCodeLength;
+                    while (nextStartIndex < fileData.length - 3) {
+                        if ((fileData[nextStartIndex] === 0x00 &&
+                            fileData[nextStartIndex + 1] === 0x00 &&
+                            fileData[nextStartIndex + 2] === 0x01) ||
+                            (nextStartIndex < fileData.length - 4 &&
+                                fileData[nextStartIndex] === 0x00 &&
+                                fileData[nextStartIndex + 1] === 0x00 &&
+                                fileData[nextStartIndex + 2] === 0x00 &&
+                                fileData[nextStartIndex + 3] === 0x01)) {
+                            break;
+                        }
+                        nextStartIndex++;
+                    }
+
+                    const naluLength = nextStartIndex - currentIndex;
+                    const naluData = fileData.slice(currentIndex, currentIndex + naluLength);
+                    const naluType = naluData[startCodeLength] & 0x1F;
+
+                    // 更新统计信息
+                    if (naluStats.hasOwnProperty(naluType)) {
+                        naluStats[naluType]++;
+                    }
+
+                    nalus.push({
+                        startIndex: currentIndex,
+                        length: naluLength,
+                        startCode: startCodeLength,
+                        type: naluType,
+                        data: naluData
+                    });
+
+                    currentIndex = nextStartIndex;
+                } else {
+                    currentIndex++;
+                }
+            }
+
+            currentNALUs = nalus;
+            currentNALUIndex = 0;
+
+            if (nalus.length > 0) {
+                displayNALU(0);
+                updateNALUStats(naluStats, nalus.length);
+                updateNALUSequence(nalus);
+            }
+        }
+
+        function displayNALU(index) {
+            const nalu = currentNALUs[index];
+            if (!nalu) return;
+
+            // 显示加载指示器
+            document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                overlay.classList.add('active');
+            });
+
+            // 使用 requestAnimationFrame 和 setTimeout 来确保加载指示器显示出来
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    updateNALUInfo(nalu);
+                    displayHexView(nalu);
+                    updateNALUCounter();
+                    // 更新序列可视化中的选中状态
+                    updateSequenceSelection(index);
+
+                    // 隐藏加载指示器
+                    document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                        overlay.classList.remove('active');
+                    });
+                }, 0);
+            });
+        }
+
+        function updateNALUInfo(nalu) {
+            const naluInfo = document.getElementById('naluInfo');
+            const naluType = NALU_TYPES[nalu.type];
+            const sizeInBytes = nalu.length;
+
+            naluInfo.innerHTML = `
+                <div class="nalu-type" style="background-color: ${naluType?.color || 'var(--dark-color)'}">
+                    ${naluType?.name || '未知类型'}<span class="nalu-type-value">${nalu.type}</span>
+                    <div class="nalu-type-description">
+                        ${naluType?.description || ''}
+                    </div>
+                </div>
+                <div class="nalu-stat">
+                    <div class="nalu-stat-item">
+                        <div class="nalu-stat-label">数据大小</div>
+                        <div class="nalu-stat-value">${sizeInBytes} 字节</div>
+                    </div>
+                    <div class="nalu-stat-item">
+                        <div class="nalu-stat-label">起始码长度</div>
+                        <div class="nalu-stat-value">${nalu.startCode} 字节</div>
+                    </div>
+                </div>
+                <div class="nalu-details-secondary">
+                    起始位置: 0x${nalu.startIndex.toString(16)}
+                </div>
+            `;
+        }
+
+        function updateNALUCounter() {
+            const counter = document.getElementById('naluCounter');
+            counter.textContent = `${currentNALUIndex + 1}/${currentNALUs.length}`;
+        }
+
+        // 十六进制查看器相关函数
+        function displayHexView(nalu) {
+            const hexContent = document.getElementById('hexContent');
+            if (!hexContent) return;
+
+            hexContent.innerHTML = '';
+            const data = nalu.data;
+
+            for (let i = 0; i < data.length; i += 16) {
+                const rowDiv = createHexRow(data, i, nalu);
+                hexContent.appendChild(rowDiv);
+            }
+
+            setupHexViewTooltips(hexContent);
+        }
+
+        function createHexRow(data, offset, nalu) {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'hex-row';
+
+            // 添加偏移量
+            const offsetSpan = document.createElement('span');
+            offsetSpan.className = 'hex-offset';
+            offsetSpan.textContent = offset.toString(16).padStart(8, '0');
+            rowDiv.appendChild(offsetSpan);
+
+            // 添加十六进制字节
+            const bytesDiv = document.createElement('div');
+            bytesDiv.className = 'hex-bytes';
+
+            // 创建16个字节位置
+            const asciiChars = [];
+            for (let j = 0; j < 16; j++) {
+                const byteSpan = document.createElement('span');
+                byteSpan.className = 'hex-byte';
+
+                if (offset + j < data.length) {
+                    const byte = data[offset + j];
+                    const isStartCode = offset + j < nalu.startCode;
+                    const isNaluType = offset + j === nalu.startCode;
+
+                    byteSpan.textContent = byte.toString(16).padStart(2, '0');
+
+                    if (isStartCode) {
+                        byteSpan.classList.add('start-code');
+                        byteSpan.setAttribute('data-tooltip', '起始码');
+                    } else if (isNaluType) {
+                        byteSpan.classList.add('nalu-header');
+                        const naluTypeValue = byte & 0x1F;
+                        const naluType = NALU_TYPES[naluTypeValue];
+                        byteSpan.style.backgroundColor = naluType?.color || 'var(--dark-color)';
+                        const hexType = HEX_NALU_TYPES[naluTypeValue] || '未知';
+                        byteSpan.setAttribute('data-tooltip', `NALU: ${hexType}`);
+                    }
+
+                    // 收集ASCII字符
+                    asciiChars.push(byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.');
+                } else {
+                    byteSpan.textContent = '  ';
+                    asciiChars.push(' ');
+                }
+                bytesDiv.appendChild(byteSpan);
+            }
+            rowDiv.appendChild(bytesDiv);
+
+            // 添加ASCII表示
+            const asciiDiv = document.createElement('div');
+            asciiDiv.className = 'hex-ascii';
+            asciiDiv.textContent = asciiChars.join('');
+            rowDiv.appendChild(asciiDiv);
+
+            return rowDiv;
+        }
+
+        function setupHexViewTooltips(hexContent) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'hex-byte-tooltip';
+            tooltip.style.display = 'none';
+            document.body.appendChild(tooltip);
+
+            hexContent.addEventListener('mouseover', (e) => {
+                const target = e.target;
+                if (target.classList.contains('hex-byte') && target.title) {
+                    tooltip.textContent = target.title;
+                    tooltip.style.display = 'block';
+
+                    const rect = target.getBoundingClientRect();
+                    tooltip.style.left = rect.left + 'px';
+                    tooltip.style.top = (rect.bottom + 5) + 'px';
+                }
+            });
+
+            hexContent.addEventListener('mouseout', () => {
+                tooltip.style.display = 'none';
+            });
+
+            // 更新工具提示位置
+            document.addEventListener('scroll', () => {
+                tooltip.style.display = 'none';
+            }, true);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function updateNALUStats(stats, totalCount) {
+            const statsContent = document.getElementById('naluStatsContent');
+            const sequencePanel = document.getElementById('naluSequencePanel');
+
+            sequencePanel.style.display = 'block';
+            statsContent.innerHTML = '';
+
+            Object.entries(stats).forEach(([type, count]) => {
+                if (count > 0) {
+                    const naluType = NALU_TYPES[type];
+                    const percent = ((count / totalCount) * 100).toFixed(1);
+
+                    const card = document.createElement('div');
+                    card.className = 'nalu-stat-card';
+                    card.innerHTML = `
+                        <div class="nalu-stat-card-header">
+                            <div class="nalu-stat-card-color" style="background-color: ${naluType.color}"></div>
+                            <div class="nalu-stat-card-title">${naluType.name}</div>
+                        </div>
+                        <div class="nalu-stat-card-count">${count}</div>
+                        <div class="nalu-stat-card-percent">${percent}%</div>
+                    `;
+                    statsContent.appendChild(card);
+                }
+            });
+        }
+
+        function updateNALUSequence(nalus) {
+            const sequencePanel = document.getElementById('naluSequencePanel');
+            const sequenceContent = document.getElementById('naluSequenceContent');
+            const avgIdrInterval = document.getElementById('avgIdrInterval');
+            const sizeToggle = document.getElementById('sizeToggle');
+
+            sequencePanel.style.display = 'block';
+            sequenceContent.innerHTML = '';
+
+            // 根据开关状态设置容器高度
+            sequenceContent.style.setProperty('--content-height',
+                sizeToggle.checked ? '100px' : '40px'
+            );
+
+            // 创建刻度尺
+            const scaleDiv = document.createElement('div');
+            scaleDiv.className = 'nalu-sequence-scale';
+
+            // 计算NALU大小范围
+            const maxSize = Math.max(...nalus.map(nalu => nalu.length));
+            const minSize = Math.min(...nalus.map(nalu => nalu.length));
+
+            // 创建刻度线
+            const scalePoints = [
+                { value: maxSize, label: formatBytes(maxSize) },
+                { value: Math.floor((maxSize + minSize) / 2), label: formatBytes(Math.floor((maxSize + minSize) / 2)) },
+                { value: minSize, label: formatBytes(minSize) }
+            ];
+
+            scalePoints.forEach(point => {
+                const scaleLine = document.createElement('div');
+                scaleLine.className = 'nalu-sequence-scale-line';
+                scaleLine.textContent = point.label;
+                scaleDiv.appendChild(scaleLine);
+            });
+
+            if (sizeToggle.checked) {
+                sequenceContent.appendChild(scaleDiv);
+            }
+
+            // 创建单个固定的tooltip元素
+            let tooltip = document.querySelector('.nalu-sequence-tooltip');
+            if (!tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.className = 'nalu-sequence-tooltip';
+                document.body.appendChild(tooltip);
+            }
+
+            // 计算IDR间隔
+            let lastIdrIndex = -1;
+            let totalInterval = 0;
+            let intervalCount = 0;
+            let idrPositions = [];
+
+            nalus.forEach((nalu, index) => {
+                if (nalu.type === 5) { // IDR帧
+                    if (lastIdrIndex !== -1) {
+                        const interval = index - lastIdrIndex;
+                        totalInterval += interval;
+                        intervalCount++;
+                    }
+                    lastIdrIndex = index;
+                    idrPositions.push(index);
+                }
+            });
+
+            // 更新平均IDR间隔
+            const avgInterval = intervalCount > 0 ? (totalInterval / intervalCount).toFixed(1) : '-';
+            avgIdrInterval.textContent = avgInterval;
+
+            // 计算高度比例
+            const minHeight = 12; // 最小高度
+            const maxHeight = 60; // 最大高度
+            const heightScale = (maxHeight - minHeight) / (maxSize - minSize || 1);
+
+            // 创建序列可视化
+            nalus.forEach((nalu, index) => {
+                const naluType = NALU_TYPES[nalu.type];
+                const item = document.createElement('div');
+                item.className = 'nalu-sequence-item';
+                item.style.backgroundColor = naluType?.color || 'var(--dark-color)';
+
+                // 根据开关状态设置高度
+                if (sizeToggle.checked) {
+                    const height = minHeight + (nalu.length - minSize) * heightScale;
+                    item.style.setProperty('--item-height', `${height}px`);
+                } else {
+                    item.style.setProperty('--item-height', `${minHeight}px`);
+                }
+
+                // 添加提示信息
+                item.setAttribute('data-index', index);
+                item.setAttribute('data-type', naluType?.name || '未知');
+                item.setAttribute('data-size', nalu.length);
+
+                // 点击事件
+                item.addEventListener('click', () => {
+                    currentNALUIndex = index;
+                    displayNALU(index);
+                    // 更新选中状态
+                    document.querySelectorAll('.nalu-sequence-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    item.classList.add('selected');
+                    // 隐藏tooltip
+                    tooltip.style.display = 'none';
+                });
+
+                // 悬停提示
+                item.addEventListener('mouseover', (e) => {
+                    tooltip.textContent = `${naluType?.name || '未知'} (${nalu.length} 字节)`;
+
+                    const rect = e.target.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+                    tooltip.style.left = (rect.left + scrollLeft) + 'px';
+                    tooltip.style.top = (rect.bottom + scrollTop + 5) + 'px';
+                    tooltip.style.display = 'block';
+                });
+
+                item.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+
+                sequenceContent.appendChild(item);
+            });
+
+            // 标记当前选中的NALU
+            if (currentNALUIndex >= 0) {
+                const items = sequenceContent.querySelectorAll('.nalu-sequence-item');
+                items[currentNALUIndex]?.classList.add('selected');
+            }
+
+            // 添加全局滚动监听
+            const handleScroll = () => {
+                tooltip.style.display = 'none';
+            };
+
+            // 移除旧的滚动监听器（如果存在）
+            window.removeEventListener('scroll', handleScroll);
+            // 添加新的滚动监听器
+            window.addEventListener('scroll', handleScroll);
+        }
+
+        // 事件监听设置
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileInput = document.getElementById('fileInput');
+            const uploadSection = document.getElementById('uploadSection');
+            const clearFileButton = document.getElementById('clearFile');
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleFile(file);
+                }
+            });
+
+            uploadSection.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadSection.classList.add('drag-over');
+            });
+
+            uploadSection.addEventListener('dragleave', () => {
+                uploadSection.classList.remove('drag-over');
+            });
+
+            uploadSection.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadSection.classList.remove('drag-over');
+
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            clearFileButton.addEventListener('click', clearFile);
+
+            document.getElementById('prevNalu').addEventListener('click', () => {
+                if (currentNALUIndex > 0) {
+                    currentNALUIndex--;
+                    displayNALU(currentNALUIndex);
+                    // 更新序列可视化中的选中状态
+                    updateSequenceSelection(currentNALUIndex);
+                }
+            });
+
+            document.getElementById('nextNalu').addEventListener('click', () => {
+                if (currentNALUIndex < currentNALUs.length - 1) {
+                    currentNALUIndex++;
+                    displayNALU(currentNALUIndex);
+                    // 更新序列可视化中的选中状态
+                    updateSequenceSelection(currentNALUIndex);
+                }
+            });
+
+            // 添加大小显示开关事件监听
+            document.getElementById('sizeToggle').addEventListener('change', (e) => {
+                if (currentNALUs.length > 0) {
+                    updateNALUSequence(currentNALUs);
+                }
+            });
+        });
+
+        // 添加新的辅助函数来更新序列选中状态
+        function updateSequenceSelection(index) {
+            const items = document.querySelectorAll('.nalu-sequence-item');
+            items.forEach(item => item.classList.remove('selected'));
+            items[index]?.classList.add('selected');
+
+            // 确保选中的项目可见（滚动到视图中）
+            const selectedItem = items[index];
+            if (selectedItem) {
+                const container = document.getElementById('naluSequenceContent');
+                const itemRect = selectedItem.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                if (itemRect.left < containerRect.left || itemRect.right > containerRect.right) {
+                    selectedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                }
+            }
+        }
+
+        // 添加加载示例文件的函数
+        async function loadSampleFile() {
+            const url = './origin30s.h264';  // 替换为您的服务器域名
+            try {
+                // 显示加载指示器
+                document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                    overlay.classList.add('active');
+                });
+
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const buffer = await response.arrayBuffer();
+                fileData = new Uint8Array(buffer);
+
+                // 更新UI显示
+                document.querySelector('.file-name').textContent = 'origin30s.h264';
+                document.querySelector('.file-size').textContent = formatFileSize(buffer.byteLength);
+                document.querySelector('.file-info').style.display = 'block';
+                document.getElementById('clearFile').style.display = 'inline-block';
+                document.getElementById('uploadSection').classList.add('has-file');
+
+                // 处理文件
+                processH264File();
+
+                // 隐藏加载指示器
+                document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                    overlay.classList.remove('active');
+                });
+            } catch (error) {
+                console.error('加载示例文件失败:', error);
+                alert('加载示例文件失败: ' + error.message);
+                // 隐藏加载指示器
+                document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                    overlay.classList.remove('active');
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>

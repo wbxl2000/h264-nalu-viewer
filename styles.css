@@ -15,10 +15,17 @@
 /* 添加 logo 相关样式 */
 .header {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
+    gap: 24px;
     margin-bottom: 30px;
+    padding: 0 20px;
+}
+
+.header-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .logo {
@@ -30,6 +37,42 @@ h1 {
     text-align: center;
     color: var(--text-color);
     margin: 0;
+}
+
+.header-links {
+    display: flex;
+    gap: 16px;
+}
+
+.header-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #24292f;
+    background-color: #f6f8fa;
+    border: 1px solid rgba(27,31,36,0.15);
+    transition: all 0.2s;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.header-link:hover {
+    background-color: #f3f4f6;
+    border-color: rgba(27,31,36,0.15);
+    color: #24292f;
+}
+
+.header-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.x-link .header-icon {
+    width: 18px;
+    height: 18px;
 }
 
 body {
@@ -733,43 +776,4 @@ body {
 
 .control-button.info:hover {
     box-shadow: 0 2px 8px rgba(23, 162, 184, 0.2);
-}
-
-/* Footer 样式 */
-.footer {
-    margin-top: 40px;
-    padding: 20px 0;
-    text-align: center;
-    border-top: 1px solid var(--border-color);
-}
-
-.footer-links {
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-}
-
-.footer-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-color);
-    text-decoration: none;
-    font-size: 14px;
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.footer-link:hover {
-    opacity: 1;
-}
-
-.footer-icon {
-    width: 20px;
-    height: 20px;
-}
-
-.x-link .footer-icon {
-    width: 18px;
-    height: 18px;
 } 

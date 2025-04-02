@@ -7,6 +7,68 @@
     <title>H.264 NALU 分析器</title>
     <link rel="icon" href="./nalu.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
+    <style>
+        /* SPS详细信息样式 */
+        .nalu-details h4 {
+            margin: 15px 0 10px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .sps-details {
+            background-color: var(--background-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        
+        .sps-detail-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            background-color: white;
+            border-radius: 6px;
+            border-left: 3px solid var(--danger-color);
+        }
+        
+        .sps-detail-label {
+            width: 130px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        
+        .sps-detail-value {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-right: 8px;
+        }
+        
+        .sps-detail-desc {
+            font-size: 13px;
+            color: var(--secondary-color);
+            margin-left: 4px;
+        }
+        
+        /* 十六进制字节工具提示样式 */
+        .hex-byte-tooltip {
+            position: absolute;
+            background-color: var(--dark-color);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 1000;
+            max-width: 200px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            font-family: monospace;
+            text-align: left;
+            pointer-events: none;
+            white-space: nowrap;
+            transition: left 0.1s, top 0.1s;
+        }
+    </style>
 </head>
 
 <body>
@@ -313,6 +375,53 @@
             const naluType = NALU_TYPES[nalu.type];
             const sizeInBytes = nalu.length;
 
+            let additionalInfo = '';
+            
+            // 如果是SPS NALU，解析更多详细信息
+            if (nalu.type === 7) { // SPS
+                const spsInfo = parseSPS(nalu.data.slice(nalu.startCode + 1)); // 跳过起始码和NALU头部
+                if (spsInfo) {
+                    const profileName = getProfileName(spsInfo.profile_idc);
+                    additionalInfo = `
+                    <div class="nalu-details">
+                        <h4>SPS详细信息</h4>
+                        <div class="sps-details">
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">Profile IDC:</span>
+                                <span class="sps-detail-value">${spsInfo.profile_idc}</span>
+                                <span class="sps-detail-desc">${profileName}</span>
+                            </div>
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">Level IDC:</span>
+                                <span class="sps-detail-value">${spsInfo.level_idc}</span>
+                                <span class="sps-detail-desc">Level ${spsInfo.level_idc}</span>
+                            </div>
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">Chroma Format:</span>
+                                <span class="sps-detail-value">${spsInfo.chroma_format_idc}</span>
+                                <span class="sps-detail-desc">${getChromaFormatName(spsInfo.chroma_format_idc)}</span>
+                            </div>
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">Bit Depth Luma:</span>
+                                <span class="sps-detail-value">${spsInfo.bit_depth_luma}</span>
+                                <span class="sps-detail-desc">位</span>
+                            </div>
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">Bit Depth Chroma:</span>
+                                <span class="sps-detail-value">${spsInfo.bit_depth_chroma}</span>
+                                <span class="sps-detail-desc">位</span>
+                            </div>
+                            <!-- 暂时隐藏分辨率显示
+                            <div class="sps-detail-item">
+                                <span class="sps-detail-label">分辨率:</span>
+                                <span class="sps-detail-value">${spsInfo.width}x${spsInfo.height}</span>
+                            </div>
+                            -->
+                        </div>
+                    </div>`;
+                }
+            }
+
             naluInfo.innerHTML = `
                 <div class="nalu-type" style="background-color: ${naluType?.color || 'var(--dark-color)'}">
                     ${naluType?.name || '未知类型'}<span class="nalu-type-value">${nalu.type}</span>
@@ -333,6 +442,7 @@
                 <div class="nalu-details-secondary">
                     起始位置: 0x${nalu.startIndex.toString(16)}
                 </div>
+                ${additionalInfo}
             `;
         }
 
@@ -383,6 +493,9 @@
                     const isNaluType = offset + j === nalu.startCode;
 
                     byteSpan.textContent = byte.toString(16).padStart(2, '0');
+                    // 添加二进制属性
+                    byteSpan.setAttribute('data-binary', byte.toString(2).padStart(8, '0'));
+                    byteSpan.setAttribute('data-hex', byte.toString(16).padStart(2, '0'));
 
                     if (isStartCode) {
                         byteSpan.classList.add('start-code');
@@ -423,13 +536,35 @@
 
             hexContent.addEventListener('mouseover', (e) => {
                 const target = e.target;
-                if (target.classList.contains('hex-byte') && target.title) {
-                    tooltip.textContent = target.title;
+                if (target.classList.contains('hex-byte') && target.textContent.trim() !== '') {
+                    // 获取十六进制和二进制值
+                    const hexValue = target.getAttribute('data-hex') || target.textContent.trim();
+                    const binaryValue = target.getAttribute('data-binary') || '';
+                    // 组合显示信息
+                    let tooltipContent = '';
+                    
+                    if (target.hasAttribute('data-tooltip')) {
+                        tooltipContent = target.getAttribute('data-tooltip') + '<br>';
+                    }
+                    
+                    if (binaryValue) {
+                        tooltipContent += `二进制: ${binaryValue}<br>十六进制: ${hexValue}`;
+                    } else {
+                        tooltipContent = target.getAttribute('data-tooltip') || '';
+                    }
+                    
+                    tooltip.innerHTML = tooltipContent;
                     tooltip.style.display = 'block';
 
-                    const rect = target.getBoundingClientRect();
-                    tooltip.style.left = rect.left + 'px';
-                    tooltip.style.top = (rect.bottom + 5) + 'px';
+                    // 使用鼠标位置而不是元素位置
+                    updateTooltipPosition(e, tooltip);
+                }
+            });
+
+            // 当鼠标在hex-byte上移动时，更新tooltip位置
+            hexContent.addEventListener('mousemove', (e) => {
+                if (tooltip.style.display === 'block') {
+                    updateTooltipPosition(e, tooltip);
                 }
             });
 
@@ -441,6 +576,30 @@
             document.addEventListener('scroll', () => {
                 tooltip.style.display = 'none';
             }, true);
+            
+            // 辅助函数：根据鼠标位置更新tooltip位置
+            function updateTooltipPosition(e, tooltip) {
+                const offset = 15; // 鼠标和tooltip之间的偏移量
+                
+                // 获取鼠标位置
+                const x = e.clientX;
+                const y = e.clientY;
+                
+                // 设置tooltip位置（在鼠标右上方）
+                tooltip.style.left = (x + offset) + 'px';
+                tooltip.style.top = (y - tooltip.offsetHeight - 5) + 'px';
+                
+                // 检查是否超出右侧边界
+                const rightEdge = window.innerWidth - tooltip.offsetWidth - 10;
+                if (parseInt(tooltip.style.left) > rightEdge) {
+                    tooltip.style.left = (x - tooltip.offsetWidth - offset) + 'px';
+                }
+                
+                // 检查是否超出顶部边界
+                if (parseInt(tooltip.style.top) < 10) {
+                    tooltip.style.top = (y + offset) + 'px';
+                }
+            }
         }
 
         function formatBytes(bytes) {
@@ -740,6 +899,354 @@
                 document.querySelectorAll('.loading-overlay').forEach(overlay => {
                     overlay.classList.remove('active');
                 });
+            }
+        }
+
+        // 解析SPS NALU数据获取详细信息
+        function parseSPS(data) {
+            if (data.length < 4) {
+                console.warn('SPS数据长度不足');
+                return null;
+            }
+            
+            try {
+                const profile_idc = data[0];
+                const level_idc = data[2];
+                
+                console.log(`SPS解析: profile_idc=${profile_idc}, level_idc=${level_idc/10}`);
+                
+                // 创建ExpGolomb解析器
+                const reader = new ExpGolombDecoder(data.slice(3));
+                
+                // 跳过seq_parameter_set_id
+                const sps_id = reader.readUEG();
+                console.log(`SPS解析: sps_id=${sps_id}`);
+                
+                let chroma_format_idc = 1; // 默认值为1（4:2:0）
+                let bit_depth_luma = 8;    // 默认值为8
+                let bit_depth_chroma = 8;  // 默认值为8
+                
+                // 根据profile_idc获取更多信息
+                if (profile_idc === 100 || profile_idc === 110 || 
+                    profile_idc === 122 || profile_idc === 244 || profile_idc === 44 || 
+                    profile_idc === 83 || profile_idc === 86 || profile_idc === 118 || 
+                    profile_idc === 128 || profile_idc === 138 || profile_idc === 139 || 
+                    profile_idc === 134 || profile_idc === 135) {
+                    
+                    chroma_format_idc = reader.readUEG();
+                    console.log(`SPS解析: 高级配置文件, chroma_format_idc=${chroma_format_idc}`);
+                    
+                    if (chroma_format_idc === 3) {
+                        // 跳过separate_colour_plane_flag
+                        const separate_colour_plane_flag = reader.readBits(1);
+                        console.log(`SPS解析: separate_colour_plane_flag=${separate_colour_plane_flag}`);
+                    }
+                    
+                    bit_depth_luma = reader.readUEG() + 8;
+                    bit_depth_chroma = reader.readUEG() + 8;
+                    console.log(`SPS解析: bit_depth_luma=${bit_depth_luma}, bit_depth_chroma=${bit_depth_chroma}`);
+                    
+                    // 跳过qpprime_y_zero_transform_bypass_flag
+                    reader.skipBits(1);
+                    
+                    // 跳过scaling matrix
+                    const scaling_matrix_present = reader.readBits(1);
+                    if (scaling_matrix_present) {
+                        const limit = (chroma_format_idc !== 3) ? 8 : 12;
+                        for (let i = 0; i < limit; i++) {
+                            const scaling_list_present = reader.readBits(1);
+                            if (scaling_list_present) {
+                                const lastScale = 8;
+                                let nextScale = 8;
+                                if (i < 6) {
+                                    for (let j = 0; j < 16; j++) {
+                                        if (nextScale !== 0) {
+                                            const delta_scale = reader.readSEG();
+                                            nextScale = (lastScale + delta_scale) & 0xff;
+                                        }
+                                    }
+                                } else {
+                                    for (let j = 0; j < 64; j++) {
+                                        if (nextScale !== 0) {
+                                            const delta_scale = reader.readSEG();
+                                            nextScale = (lastScale + delta_scale) & 0xff;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 处理log2_max_frame_num_minus4
+                const log2_max_frame_num_minus4 = reader.readUEG();
+                console.log(`SPS解析: log2_max_frame_num_minus4=${log2_max_frame_num_minus4}`);
+                
+                // pic_order_cnt_type
+                const pic_order_cnt_type = reader.readUEG();
+                console.log(`SPS解析: pic_order_cnt_type=${pic_order_cnt_type}`);
+                
+                if (pic_order_cnt_type === 0) {
+                    const log2_max_pic_order_cnt_lsb_minus4 = reader.readUEG();
+                    console.log(`SPS解析: log2_max_pic_order_cnt_lsb_minus4=${log2_max_pic_order_cnt_lsb_minus4}`);
+                } else if (pic_order_cnt_type === 1) {
+                    reader.skipBits(1); // delta_pic_order_always_zero_flag
+                    reader.readSEG();   // offset_for_non_ref_pic
+                    reader.readSEG();   // offset_for_top_to_bottom_field
+                    
+                    const num_ref_frames_in_pic_order_cnt_cycle = reader.readUEG();
+                    for (let i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++) {
+                        reader.readSEG(); // offset_for_ref_frame[i]
+                    }
+                }
+                
+                // max_num_ref_frames
+                const max_num_ref_frames = reader.readUEG();
+                console.log(`SPS解析: max_num_ref_frames=${max_num_ref_frames}`);
+                
+                // gaps_in_frame_num_value_allowed_flag
+                reader.skipBits(1);
+                
+                // 图像宽高信息
+                const pic_width_in_mbs_minus1 = reader.readUEG();
+                const pic_height_in_map_units_minus1 = reader.readUEG();
+                console.log(`SPS解析: pic_width_in_mbs_minus1=${pic_width_in_mbs_minus1}, pic_height_in_map_units_minus1=${pic_height_in_map_units_minus1}`);
+                
+                // frame_mbs_only_flag
+                const frame_mbs_only_flag = reader.readBits(1);
+                console.log(`SPS解析: frame_mbs_only_flag=${frame_mbs_only_flag}`);
+                
+                // 计算初始宽高
+                let width = (pic_width_in_mbs_minus1 + 1) * 16;
+                let height = (pic_height_in_map_units_minus1 + 1) * 16;
+                console.log(`SPS解析: 初始分辨率计算: ${width}x${height}`);
+                
+                if (!frame_mbs_only_flag) {
+                    // mb_adaptive_frame_field_flag
+                    const mb_adaptive_frame_field_flag = reader.readBits(1);
+                    console.log(`SPS解析: mb_adaptive_frame_field_flag=${mb_adaptive_frame_field_flag}`);
+                    height *= 2;
+                    console.log(`SPS解析: 非帧编码模式, 高度调整为: ${height}`);
+                }
+                
+                // 读取裁剪参数 (crop parameters)
+                let frame_crop_left_offset = 0;
+                let frame_crop_right_offset = 0;
+                let frame_crop_top_offset = 0;
+                let frame_crop_bottom_offset = 0;
+                
+                const frame_cropping_flag = reader.readBits(1);
+                console.log(`SPS解析: frame_cropping_flag=${frame_cropping_flag}`);
+                
+                if (frame_cropping_flag) {
+                    frame_crop_left_offset = reader.readUEG();
+                    frame_crop_right_offset = reader.readUEG();
+                    frame_crop_top_offset = reader.readUEG();
+                    frame_crop_bottom_offset = reader.readUEG();
+                    console.log(`SPS解析: 裁剪参数: left=${frame_crop_left_offset}, right=${frame_crop_right_offset}, top=${frame_crop_top_offset}, bottom=${frame_crop_bottom_offset}`);
+                }
+                
+                // 应用裁剪参数计算最终分辨率
+                // 计算裁剪参数的乘数，取决于chroma_format_idc
+                let cropUnitX = 1;
+                let cropUnitY = 1;
+                
+                // 根据色度采样格式设置裁剪单位
+                if (chroma_format_idc === 0) {
+                    // 单色
+                    cropUnitX = 1;
+                    cropUnitY = 1;
+                } else {
+                    // 4:2:0, 4:2:2, 4:4:4 等
+                    // 色度采样格式会影响裁剪单位
+                    // 参考H.264标准 7.4.2.1.1节
+                    cropUnitX = chroma_format_idc === 3 ? 1 : 2;
+                    cropUnitY = chroma_format_idc === 1 ? 2 : 1;
+                }
+                
+                if (!frame_mbs_only_flag) {
+                    // 场编码时，垂直裁剪单位需要调整
+                    cropUnitY *= 2;
+                }
+                
+                console.log(`SPS解析: 裁剪单位: cropUnitX=${cropUnitX}, cropUnitY=${cropUnitY}`);
+                
+                width -= (frame_crop_left_offset + frame_crop_right_offset) * cropUnitX;
+                height -= (frame_crop_top_offset + frame_crop_bottom_offset) * cropUnitY;
+                
+                console.log(`SPS解析: 最终分辨率: ${width}x${height}`);
+                
+                return {
+                    profile_idc: profile_idc,
+                    level_idc: level_idc / 10, // 转换为常见表示形式
+                    chroma_format_idc: chroma_format_idc,
+                    bit_depth_luma: bit_depth_luma,
+                    bit_depth_chroma: bit_depth_chroma,
+                    width: width,
+                    height: height
+                };
+            } catch (e) {
+                console.error('SPS解析错误:', e);
+                return null;
+            }
+        }
+        
+        // 获取色度采样格式描述
+        function getChromaFormatName(chroma_format_idc) {
+            switch (chroma_format_idc) {
+                case 0: return '单色';
+                case 1: return '4:2:0';
+                case 2: return '4:2:2';
+                case 3: return '4:4:4';
+                default: return '未知';
+            }
+        }
+        
+        // ExpGolomb解码器 - 用于解析H.264比特流
+        class ExpGolombDecoder {
+            constructor(data) {
+                this.data = data;
+                this.bytesAvailable = data.length;
+                this.bytePos = 0;
+                this.bitPos = 0;
+                this.curByte = 0;
+            }
+            
+            readBits(size) {
+                let result = 0;
+                let bitsConsumed = 0;
+                let bitsLeft = size;
+                
+                // 读取已缓存的位
+                if (this.bitPos > 0) {
+                    const readSize = Math.min(this.bitPos, bitsLeft);
+                    const maskSize = Math.pow(2, readSize) - 1;
+                    const mask = maskSize << (this.bitPos - readSize);
+                    result = (this.curByte & mask) >> (this.bitPos - readSize);
+                    this.bitPos -= readSize;
+                    bitsConsumed = readSize;
+                    bitsLeft -= readSize;
+                }
+                
+                // 按字节处理剩余位
+                while (bitsLeft > 0 && this.bytePos < this.bytesAvailable) {
+                    // 获取下一个字节
+                    if (this.bitPos === 0) {
+                        this.curByte = this.data[this.bytePos];
+                        this.bytePos++;
+                        this.bitPos = 8;
+                    }
+                    
+                    const readSize = Math.min(this.bitPos, bitsLeft);
+                    const maskSize = Math.pow(2, readSize) - 1;
+                    const mask = maskSize << (this.bitPos - readSize);
+                    const newBits = (this.curByte & mask) >> (this.bitPos - readSize);
+                    
+                    result = (result << readSize) | newBits;
+                    this.bitPos -= readSize;
+                    bitsConsumed += readSize;
+                    bitsLeft -= readSize;
+                }
+                
+                return result;
+            }
+            
+            skipBits(size) {
+                let bitsLeft = size;
+                
+                // 跳过已缓存的位
+                if (this.bitPos > 0) {
+                    const skipSize = Math.min(this.bitPos, bitsLeft);
+                    this.bitPos -= skipSize;
+                    bitsLeft -= skipSize;
+                }
+                
+                // 按字节跳过剩余位
+                const bytesToSkip = Math.floor(bitsLeft / 8);
+                if (bytesToSkip > 0) {
+                    this.bytePos += bytesToSkip;
+                    bitsLeft -= bytesToSkip * 8;
+                }
+                
+                // 处理剩余位
+                if (bitsLeft > 0 && this.bytePos < this.bytesAvailable) {
+                    this.curByte = this.data[this.bytePos];
+                    this.bytePos++;
+                    this.bitPos = 8 - bitsLeft;
+                }
+            }
+            
+            // 读取无符号指数哥伦布编码值
+            readUEG() {
+                let zeroBits = 0;
+                
+                // 计算前导零的个数
+                while (this.bytePos < this.bytesAvailable) {
+                    if (this.bitPos === 0) {
+                        this.curByte = this.data[this.bytePos];
+                        this.bytePos++;
+                        this.bitPos = 8;
+                    }
+                    
+                    if ((this.curByte & (0x80 >> (8 - this.bitPos))) !== 0) {
+                        // 遇到1，结束前导零的计数
+                        break;
+                    }
+                    
+                    zeroBits++;
+                    this.bitPos--;
+                    
+                    if (this.bitPos === 0) {
+                        // 移动到下一个字节
+                        this.curByte = 0;
+                    }
+                }
+                
+                // 跳过标记位1
+                this.bitPos--;
+                
+                if (zeroBits === 0) {
+                    return 0;
+                }
+                
+                // 读取剩余的比特
+                let result = this.readBits(zeroBits);
+                result += Math.pow(2, zeroBits) - 1;
+                
+                return result;
+            }
+            
+            // 读取有符号指数哥伦布编码值
+            readSEG() {
+                const value = this.readUEG();
+                if (value & 0x01) {
+                    // 奇数为正数
+                    return (value + 1) >> 1;
+                } else {
+                    // 偶数为负数
+                    return -1 * (value >> 1);
+                }
+            }
+        }
+
+        // 获取Profile名称
+        function getProfileName(profile_idc) {
+            switch (profile_idc) {
+                case 66: return 'Baseline Profile';
+                case 77: return 'Main Profile';
+                case 88: return 'Extended Profile';
+                case 100: return 'High Profile';
+                case 110: return 'High 10 Profile';
+                case 122: return 'High 4:2:2 Profile';
+                case 244: return 'High 4:4:4 Profile';
+                case 44: return 'CAVLC 4:4:4 Profile';
+                case 83: return 'Scalable Baseline Profile';
+                case 86: return 'Scalable High Profile';
+                case 118: return 'Stereo High Profile';
+                case 128: return 'Multiview High Profile';
+                case 138: return 'Multiview Depth High Profile';
+                case 139: return 'Enhanced Multiview Depth High Profile';
+                default: return '未知 Profile';
             }
         }
     </script>

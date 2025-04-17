@@ -275,6 +275,57 @@ function updateNALUInfo(nalu) {
             </div>`;
         }
     }
+    // 如果是PPS NALU，解析更多详细信息
+    else if (nalu.type === 8) { // PPS
+        const ppsInfo = parsePPSData(nalu.data);
+        if (ppsInfo) {
+            // 格式化完整PPS信息为JSON字符串，并添加缩进
+            const ppsJsonString = JSON.stringify(ppsInfo.rawPpsInfo, null, 2);
+            
+            additionalInfo = `
+            <div class="nalu-details">
+                <h4>PPS详细信息</h4>
+                <div class="sps-details">
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">PPS ID:</span>
+                        <span class="sps-detail-value">${ppsInfo.pps_id}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">SPS ID:</span>
+                        <span class="sps-detail-value">${ppsInfo.sps_id}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">熵编码模式:</span>
+                        <span class="sps-detail-value">${ppsInfo.entropy_coding_mode_flag ? 'CABAC' : 'CAVLC'}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">片组数量:</span>
+                        <span class="sps-detail-value">${ppsInfo.num_slice_groups}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">加权预测标志:</span>
+                        <span class="sps-detail-value">${ppsInfo.weighted_pred_flag ? '开启' : '关闭'}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">初始量化参数:</span>
+                        <span class="sps-detail-value">${ppsInfo.pic_init_qp}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">去块滤波控制:</span>
+                        <span class="sps-detail-value">${ppsInfo.deblocking_filter_control_present_flag ? '存在' : '不存在'}</span>
+                    </div>
+                    <div class="sps-detail-item">
+                        <span class="sps-detail-label">变换8x8模式:</span>
+                        <span class="sps-detail-value">${ppsInfo.transform_8x8_mode_flag ? '开启' : '关闭'}</span>
+                    </div>
+                </div>
+                <div class="sps-json">
+                    <h4>PPS完整解析结果</h4>
+                    <pre>${ppsJsonString}</pre>
+                </div>
+            </div>`;
+        }
+    }
 
     naluInfo.innerHTML = `
         <div class="nalu-type" style="background-color: ${naluType?.color || 'var(--dark-color)'}">
@@ -836,6 +887,69 @@ function parseSPSData(data) {
         };
     } catch (e) {
         console.error('SPS解析错误:', e);
+        return null;
+    }
+}
+
+// 使用sps-pps库解析PPS数据
+function parsePPSData(data) {
+    try {
+        // 跳过起始码
+        const startCodeLength = data[0] === 0 && data[1] === 0 && data[2] === 0 && data[3] === 1 ? 4 :
+                               data[0] === 0 && data[1] === 0 && data[2] === 1 ? 3 : 0;
+        
+        if (startCodeLength === 0) {
+            console.error('无效的NALU数据：找不到起始码');
+            return null;
+        }
+        
+        // 提取不包含起始码的NALU数据
+        const naluData = data.slice(startCodeLength);
+        
+        // 验证NALU类型
+        const naluType = naluData[0] & 0x1F;
+        if (naluType !== 8) {
+            console.error(`无效的NALU类型：${naluType}，期望PPS(8)`);
+            return null;
+        }
+        
+        // PPS解析需要SPS的信息，获取当前所有的SPS NALU
+        const spsMap = new Map();
+        for (const nalu of currentNALUs) {
+            if (nalu.type === 7) { // 找到SPS
+                try {
+                    const spsNaluData = nalu.data.slice(nalu.startCode);
+                    const spsInfo = spsPpsParser.parseSPS(spsNaluData);
+                    spsMap.set(spsInfo.sps_id, spsInfo);
+                } catch (e) {
+                    console.error('解析SPS失败:', e);
+                }
+            }
+        }
+        
+        // 调用解析函数，传入不包含起始码的NALU和SPS映射
+        const ppsInfo = spsPpsParser.parsePPS(naluData, spsMap);
+        
+        // 返回解析后的结果
+        return {
+            pps_id: ppsInfo.pps_id,
+            sps_id: ppsInfo.sps_id,
+            entropy_coding_mode_flag: ppsInfo.entropy_coding_mode_flag,
+            bottom_field_pic_order_in_frame_present_flag: ppsInfo.bottom_field_pic_order_in_frame_present_flag,
+            num_slice_groups: ppsInfo.num_slice_groups,
+            weighted_pred_flag: ppsInfo.weighted_pred_flag,
+            weighted_bipred_idc: ppsInfo.weighted_bipred_idc,
+            pic_init_qp: ppsInfo.pic_init_qp,
+            deblocking_filter_control_present_flag: ppsInfo.deblocking_filter_control_present_flag,
+            constrained_intra_pred_flag: ppsInfo.constrained_intra_pred_flag,
+            redundant_pic_cnt_present_flag: ppsInfo.redundant_pic_cnt_present_flag,
+            transform_8x8_mode_flag: ppsInfo.transform_8x8_mode_flag,
+            pic_scaling_matrix_present_flag: ppsInfo.pic_scaling_matrix_present_flag,
+            // 存储完整的PPS解析结果
+            rawPpsInfo: ppsInfo
+        };
+    } catch (e) {
+        console.error('PPS解析错误:', e);
         return null;
     }
 }

@@ -1,0 +1,22 @@
+{
+  "name": "h264-nalu-viewer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build:sps": "cd lib/h264-sps-pps-parser && pnpm install && pnpm run tsc",
+    "build:sps:rollup": "rollup -c rollup.config.js",
+    "build": "pnpm run build:sps && pnpm run build:sps:rollup"
+  },
+  "dependencies": {
+    "rollup-plugin-dts": "^6.2.1",
+    "typescript": "^4.2.4",
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "rollup": "^4.40.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

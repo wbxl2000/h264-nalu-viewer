@@ -117,10 +117,11 @@ export function getVUIParams(flag: 0|1, stream: Bitstream): VUIParams {
 
   vp.aspect_ratio_info_present_flag = stream.readBit();
   if (vp.aspect_ratio_info_present_flag) {
-    vp.aspect_ratio_idc = stream.ExpGolomb();
+    vp.aspect_ratio_idc = stream.readByte();
+    
     if (vp.aspect_ratio_idc === 255) { // Extended_SAR
-      vp.sar_width = stream.readByte();
-      vp.sar_height = stream.readByte();
+      vp.sar_width = stream.readHalfWord();
+      vp.sar_height = stream.readHalfWord();
     }
   }
   
@@ -157,33 +158,34 @@ export function getVUIParams(flag: 0|1, stream: Bitstream): VUIParams {
     vp.time_scale = stream.readWord();
     vp.fixed_frame_rate_flag = stream.readBit();
   }
+  hrd_parameters(vp.hrd_params, stream);
+  
+  // vp.nal_hrd_parameters_present_flag = stream.readBit();
+  // if (vp.nal_hrd_parameters_present_flag) {
+  //   hrd_parameters(vp.hrd_params, stream);
+  // }
 
-  vp.nal_hrd_parameters_present_flag = stream.readBit();
-  if (vp.nal_hrd_parameters_present_flag) {
-    hrd_parameters(vp.hrd_params, stream);
-  }
+  // vp.vcl_hrd_parameters_present_flag = stream.readBit();
+  // if (vp.vcl_hrd_parameters_present_flag) {
+  //   hrd_parameters(vp.hrd_params, stream);
+  // }
 
-  vp.vcl_hrd_parameters_present_flag = stream.readBit();
-  if (vp.vcl_hrd_parameters_present_flag) {
-    hrd_parameters(vp.hrd_params, stream);
-  }
+  // if (vp.nal_hrd_parameters_present_flag || vp.vcl_hrd_parameters_present_flag) {
+  //   vp.low_delay_hrd_flag = stream.readBit();
+  // }
 
-  if (vp.nal_hrd_parameters_present_flag || vp.vcl_hrd_parameters_present_flag) {
-    vp.low_delay_hrd_flag = stream.readBit();
-  }
+  // vp.pic_struct_present_flag = stream.readBit();
+  // vp.bitstream_restriction_flag = stream.readBit();
 
-  vp.pic_struct_present_flag = stream.readBit();
-  vp.bitstream_restriction_flag = stream.readBit();
-
-  if (vp.bitstream_restriction_flag) {
-    vp.motion_vectors_over_pic_boundaries_flag = stream.readBit();
-    vp.max_bytes_per_pic_denom = stream.ExpGolomb();
-    vp.max_bits_per_mb_denom = stream.ExpGolomb();
-    vp.log2_max_mv_length_horizontal = stream.ExpGolomb();
-    vp.log2_max_mv_length_vertical = stream.ExpGolomb();
-    vp.num_reorder_frames = stream.ExpGolomb();
-    vp.max_dec_frame_buffering = stream.ExpGolomb();
-  }
+  // if (vp.bitstream_restriction_flag) {
+  //   vp.motion_vectors_over_pic_boundaries_flag = stream.readBit();
+  //   vp.max_bytes_per_pic_denom = stream.ExpGolomb();
+  //   vp.max_bits_per_mb_denom = stream.ExpGolomb();
+  //   vp.log2_max_mv_length_horizontal = stream.ExpGolomb();
+  //   vp.log2_max_mv_length_vertical = stream.ExpGolomb();
+  //   vp.num_reorder_frames = stream.ExpGolomb();
+  //   vp.max_dec_frame_buffering = stream.ExpGolomb();
+  // }
 
   return vp;
 }

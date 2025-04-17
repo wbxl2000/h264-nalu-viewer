@@ -43,6 +43,7 @@ type VUIParams = {
     chroma_sample_loc_type_bottom_field: number;
     timing_info_present_flag: 0 | 1;
     num_units_in_tick: number;
+    num_units_in_tick_bits: string;
     time_scale: number;
     fixed_frame_rate_flag: 0 | 1;
     nal_hrd_parameters_present_flag: 0 | 1;

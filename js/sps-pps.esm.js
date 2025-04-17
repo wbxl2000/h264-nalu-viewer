@@ -75,7 +75,28 @@ function requireBitstream () {
 	        if (skip === 0)
 	            return high;
 	        const low = this.view.getUint8(byteoffset + 1);
-	        return (high << skip) | (low >>> (8 - skip));
+	        return ((high << skip) | (low >>> (8 - skip))) & 0xff;
+	    }
+	    /**
+	     * 读取16位无符号整数(u(16))
+	     * @returns 16位无符号整数值
+	     */
+	    readHalfWord() {
+	        const skip = this.bitoffset & 7;
+	        const byteoffset = this.bitoffset >>> 3;
+	        this.bitoffset += 16;
+	        const { view } = this;
+	        // 如果对齐到字节边界，直接读取
+	        if (skip === 0) {
+	            return view.getUint8(byteoffset) * 256 + view.getUint8(byteoffset + 1);
+	        }
+	        // 否则需要处理位偏移
+	        const byte1 = view.getUint8(byteoffset);
+	        const byte2 = view.getUint8(byteoffset + 1);
+	        const byte3 = view.getUint8(byteoffset + 2);
+	        const highBits = (byte1 << skip) | (byte2 >>> (8 - skip));
+	        const lowBits = (byte2 << skip) | (byte3 >>> (8 - skip));
+	        return (highBits << 8) | lowBits & 0xff;
 	    }
 	    readNibble() {
 	        const skip = this.bitoffset & 7;
@@ -182,6 +203,7 @@ function requireVui () {
 	        chroma_sample_loc_type_bottom_field: 0,
 	        timing_info_present_flag: 0,
 	        num_units_in_tick: 0,
+	        num_units_in_tick_bits: '',
 	        time_scale: 0,
 	        fixed_frame_rate_flag: 0,
 	        nal_hrd_parameters_present_flag: 0,
@@ -213,10 +235,10 @@ function requireVui () {
 	        return vp;
 	    vp.aspect_ratio_info_present_flag = stream.readBit();
 	    if (vp.aspect_ratio_info_present_flag) {
-	        vp.aspect_ratio_idc = stream.ExpGolomb();
+	        vp.aspect_ratio_idc = stream.readByte();
 	        if (vp.aspect_ratio_idc === 255) { // Extended_SAR
-	            vp.sar_width = stream.readByte();
-	            vp.sar_height = stream.readByte();
+	            vp.sar_width = stream.readHalfWord();
+	            vp.sar_height = stream.readHalfWord();
 	        }
 	    }
 	    vp.overscan_info_present_flag = stream.readBit();
@@ -243,32 +265,49 @@ function requireVui () {
 	    }
 	    vp.timing_info_present_flag = stream.readBit();
 	    if (vp.timing_info_present_flag) {
+	        // 保存当前位偏移
+	        const beforeOffset = stream.bitoffset;
+	        // 读取num_units_in_tick值
 	        vp.num_units_in_tick = stream.readWord();
+	        // 计算读取了多少位
+	        const afterOffset = stream.bitoffset;
+	        const bitsRead = afterOffset - beforeOffset;
+	        // 重置偏移并手动读取每一位
+	        stream.bitoffset = beforeOffset;
+	        let bitString = '';
+	        for (let i = 0; i < bitsRead; i++) {
+	            bitString += stream.readBit();
+	        }
+	        // 保存二进制字符串
+	        vp.num_units_in_tick_bits = bitString;
+	        console.log(`num_units_in_tick 原始二进制序列 (${bitString.length}位): ${bitString}`);
+	        console.log(`num_units_in_tick 十进制值: ${vp.num_units_in_tick}`);
 	        vp.time_scale = stream.readWord();
 	        vp.fixed_frame_rate_flag = stream.readBit();
 	    }
-	    vp.nal_hrd_parameters_present_flag = stream.readBit();
-	    if (vp.nal_hrd_parameters_present_flag) {
-	        hrd_parameters(vp.hrd_params, stream);
-	    }
-	    vp.vcl_hrd_parameters_present_flag = stream.readBit();
-	    if (vp.vcl_hrd_parameters_present_flag) {
-	        hrd_parameters(vp.hrd_params, stream);
-	    }
-	    if (vp.nal_hrd_parameters_present_flag || vp.vcl_hrd_parameters_present_flag) {
-	        vp.low_delay_hrd_flag = stream.readBit();
-	    }
-	    vp.pic_struct_present_flag = stream.readBit();
-	    vp.bitstream_restriction_flag = stream.readBit();
-	    if (vp.bitstream_restriction_flag) {
-	        vp.motion_vectors_over_pic_boundaries_flag = stream.readBit();
-	        vp.max_bytes_per_pic_denom = stream.ExpGolomb();
-	        vp.max_bits_per_mb_denom = stream.ExpGolomb();
-	        vp.log2_max_mv_length_horizontal = stream.ExpGolomb();
-	        vp.log2_max_mv_length_vertical = stream.ExpGolomb();
-	        vp.num_reorder_frames = stream.ExpGolomb();
-	        vp.max_dec_frame_buffering = stream.ExpGolomb();
-	    }
+	    hrd_parameters(vp.hrd_params, stream);
+	    // vp.nal_hrd_parameters_present_flag = stream.readBit();
+	    // if (vp.nal_hrd_parameters_present_flag) {
+	    //   hrd_parameters(vp.hrd_params, stream);
+	    // }
+	    // vp.vcl_hrd_parameters_present_flag = stream.readBit();
+	    // if (vp.vcl_hrd_parameters_present_flag) {
+	    //   hrd_parameters(vp.hrd_params, stream);
+	    // }
+	    // if (vp.nal_hrd_parameters_present_flag || vp.vcl_hrd_parameters_present_flag) {
+	    //   vp.low_delay_hrd_flag = stream.readBit();
+	    // }
+	    // vp.pic_struct_present_flag = stream.readBit();
+	    // vp.bitstream_restriction_flag = stream.readBit();
+	    // if (vp.bitstream_restriction_flag) {
+	    //   vp.motion_vectors_over_pic_boundaries_flag = stream.readBit();
+	    //   vp.max_bytes_per_pic_denom = stream.ExpGolomb();
+	    //   vp.max_bits_per_mb_denom = stream.ExpGolomb();
+	    //   vp.log2_max_mv_length_horizontal = stream.ExpGolomb();
+	    //   vp.log2_max_mv_length_vertical = stream.ExpGolomb();
+	    //   vp.num_reorder_frames = stream.ExpGolomb();
+	    //   vp.max_dec_frame_buffering = stream.ExpGolomb();
+	    // }
 	    return vp;
 	}
 	vui.getVUIParams = getVUIParams;
@@ -558,3 +597,4 @@ var distExports = requireDist();
 var index = /*@__PURE__*/getDefaultExportFromCjs(distExports);
 
 export { index as default };
+//# sourceMappingURL=sps-pps.esm.js.map

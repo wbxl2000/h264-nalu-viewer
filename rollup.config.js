@@ -9,7 +9,7 @@ const codeConfig = {
   output: {
     file: './js/sps-pps.esm.js',
     format: 'esm',
-    sourcemap: false
+    sourcemap: true
   },
   plugins: [
     resolve(), // 解析node_modules中的模块

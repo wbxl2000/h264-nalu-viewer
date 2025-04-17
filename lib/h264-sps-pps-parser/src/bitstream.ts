@@ -71,7 +71,34 @@ export class Bitstream {
 
     const low = this.view.getUint8(byteoffset + 1);
 
-    return (high << skip) | (low >>> (8 - skip));
+    return ((high << skip) | (low >>> (8 - skip))) & 0xff;
+  }
+
+  /**
+   * 读取16位无符号整数(u(16))
+   * @returns 16位无符号整数值
+   */
+  readHalfWord(): number {
+    const skip = this.bitoffset & 7;
+    const byteoffset = this.bitoffset >>> 3;
+    this.bitoffset += 16;
+
+    const { view } = this;
+    
+    // 如果对齐到字节边界，直接读取
+    if (skip === 0) {
+      return view.getUint8(byteoffset) * 256 + view.getUint8(byteoffset + 1);
+    }
+    
+    // 否则需要处理位偏移
+    const byte1 = view.getUint8(byteoffset);
+    const byte2 = view.getUint8(byteoffset + 1);
+    const byte3 = view.getUint8(byteoffset + 2);
+    
+    const highBits = (byte1 << skip) | (byte2 >>> (8 - skip));
+    const lowBits = (byte2 << skip) | (byte3 >>> (8 - skip));
+    
+    return (highBits << 8) | lowBits & 0xff;
   }
 
   readNibble(): number {

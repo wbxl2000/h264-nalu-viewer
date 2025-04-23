@@ -106,6 +106,7 @@ function clearFile() {
     document.getElementById('naluCounter').textContent = '0/0';
     document.getElementById('uploadSection').classList.remove('has-file');
     document.getElementById('naluSequencePanel').style.display = 'none';
+    document.getElementById('parameterSetsContent').style.display = 'none';
     // 清理tooltip
     const tooltip = document.querySelector('.nalu-sequence-tooltip');
     if (tooltip) {
@@ -209,6 +210,15 @@ function displayNALU(index) {
             updateNALUCounter();
             // 更新序列可视化中的选中状态
             updateSequenceSelection(index);
+            
+            // 检查是否显示参数集面板（仅SPS和PPS类型显示）
+            const parameterSetsContent = document.getElementById('parameterSetsContent');
+            if (nalu.type === 7 || nalu.type === 8) { // SPS或PPS
+                displayParameterSetsInfo(nalu);
+                parameterSetsContent.style.display = 'block';
+            } else {
+                parameterSetsContent.style.display = 'none';
+            }
 
             // 隐藏加载指示器
             document.querySelectorAll('.loading-overlay').forEach(overlay => {
@@ -227,12 +237,9 @@ function updateNALUInfo(nalu) {
     
     // 如果是SPS NALU，解析更多详细信息
     if (nalu.type === 7) { // SPS
-        const spsInfo = parseSPSData(nalu.data); // 使用新的解析函数
+        const spsInfo = parseSPSData(nalu.data);
         if (spsInfo) {
             const profileName = getProfileName(spsInfo.profile_idc);
-            
-            // 格式化完整SPS信息为JSON字符串，并添加缩进
-            const spsJsonString = JSON.stringify(spsInfo.rawSpsInfo, null, 2);
             
             additionalInfo = `
             <div class="nalu-details">
@@ -268,10 +275,6 @@ function updateNALUInfo(nalu) {
                         <span class="sps-detail-value">${spsInfo.width}x${spsInfo.height}</span>
                     </div>
                 </div>
-                <div class="sps-json">
-                    <h4>SPS完整解析结果</h4>
-                    <pre>${spsJsonString}</pre>
-                </div>
             </div>`;
         }
     }
@@ -279,9 +282,6 @@ function updateNALUInfo(nalu) {
     else if (nalu.type === 8) { // PPS
         const ppsInfo = parsePPSData(nalu.data);
         if (ppsInfo) {
-            // 格式化完整PPS信息为JSON字符串，并添加缩进
-            const ppsJsonString = JSON.stringify(ppsInfo.rawPpsInfo, null, 2);
-            
             additionalInfo = `
             <div class="nalu-details">
                 <h4>PPS详细信息</h4>
@@ -318,10 +318,6 @@ function updateNALUInfo(nalu) {
                         <span class="sps-detail-label">变换8x8模式:</span>
                         <span class="sps-detail-value">${ppsInfo.transform_8x8_mode_flag ? '开启' : '关闭'}</span>
                     </div>
-                </div>
-                <div class="sps-json">
-                    <h4>PPS完整解析结果</h4>
-                    <pre>${ppsJsonString}</pre>
                 </div>
             </div>`;
         }
@@ -750,19 +746,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 添加新的辅助函数来更新序列选中状态
 function updateSequenceSelection(index) {
-    const items = document.querySelectorAll('.nalu-sequence-item');
-    items.forEach(item => item.classList.remove('selected'));
-    items[index]?.classList.add('selected');
-
-    // 确保选中的项目可见（滚动到视图中）
-    const selectedItem = items[index];
+    // 清除所有选中
+    document.querySelectorAll('.nalu-sequence-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    // 设置当前选中
+    const selectedItem = document.querySelector(`.nalu-sequence-item[data-index="${index}"]`);
     if (selectedItem) {
-        const container = document.getElementById('naluSequenceContent');
-        const itemRect = selectedItem.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
+        selectedItem.classList.add('selected');
+        // 滚动到视图
+        selectedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+}
 
-        if (itemRect.left < containerRect.left || itemRect.right > containerRect.right) {
-            selectedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+// 显示参数集完整解析信息
+function displayParameterSetsInfo(nalu) {
+    const contentElement = document.getElementById('parameterSetsContent');
+    contentElement.innerHTML = '';
+    
+    // 添加标题
+    const headerDiv = document.createElement('div');
+    headerDiv.style.borderBottom = '1px solid var(--border-color)';
+    headerDiv.style.marginBottom = '15px';
+    headerDiv.style.paddingBottom = '10px';
+    
+    if (nalu.type === 7) { // SPS
+        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--danger-color);">SPS (序列参数集) 完整数据结构</h4>';
+        contentElement.appendChild(headerDiv);
+        
+        const spsInfo = parseSPSData(nalu.data);
+        if (spsInfo) {
+            // 添加完整JSON信息
+            const jsonItem = document.createElement('div');
+            jsonItem.className = 'parameter-item';
+            
+            const jsonPre = document.createElement('pre');
+            jsonPre.className = 'parameter-value';
+            jsonPre.style.maxHeight = '400px';
+            jsonPre.style.overflow = 'auto';
+            jsonPre.style.margin = '0';
+            jsonPre.textContent = JSON.stringify(spsInfo.rawSpsInfo, null, 2);
+            jsonItem.appendChild(jsonPre);
+            
+            contentElement.appendChild(jsonItem);
+        } else {
+            contentElement.innerHTML = '<div class="parameter-item">SPS解析失败</div>';
+        }
+    } else if (nalu.type === 8) { // PPS
+        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--warning-color);">PPS (图像参数集) 完整数据结构</h4>';
+        contentElement.appendChild(headerDiv);
+        
+        const ppsInfo = parsePPSData(nalu.data);
+        if (ppsInfo) {
+            // 添加完整JSON信息
+            const jsonItem = document.createElement('div');
+            jsonItem.className = 'parameter-item';
+            
+            const jsonPre = document.createElement('pre');
+            jsonPre.className = 'parameter-value';
+            jsonPre.style.maxHeight = '400px';
+            jsonPre.style.overflow = 'auto';
+            jsonPre.style.margin = '0';
+            jsonPre.textContent = JSON.stringify(ppsInfo.rawPpsInfo, null, 2);
+            jsonItem.appendChild(jsonPre);
+            
+            contentElement.appendChild(jsonItem);
+        } else {
+            contentElement.innerHTML = '<div class="parameter-item">PPS解析失败</div>';
         }
     }
 }

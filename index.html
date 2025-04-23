@@ -68,6 +68,138 @@
             white-space: nowrap;
             transition: left 0.1s, top 0.1s;
         }
+        
+        /* SPS和PPS完整解析结果样式 */
+        .parameter-sets-panel {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-top: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .parameter-sets-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .parameter-sets-content {
+            padding: 15px 20px;
+            max-height: 500px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border-color);
+            margin-top: 20px;
+        }
+        
+        .parameter-item {
+            margin-bottom: 10px;
+            border-left: 3px solid var(--primary-color);
+            padding-left: 10px;
+            background-color: var(--background-color);
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .parameter-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--dark-color);
+        }
+        
+        .parameter-value {
+            font-family: monospace;
+            color: var(--primary-color);
+        }
+        
+        .parameter-description {
+            font-size: 13px;
+            color: var(--secondary-color);
+            margin-top: 5px;
+        }
+        
+        /* 页脚样式 */
+        .footer {
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+        
+        .social-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .support-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+        
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .social-links a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #24292f;
+            background-color: #f6f8fa;
+            border: 1px solid rgba(27,31,36,0.15);
+            transition: all 0.2s;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        
+        .social-links a:hover {
+            background-color: #f3f4f6;
+            border-color: rgba(27,31,36,0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .github-link:hover {
+            color: #24292f;
+        }
+        
+        .x-link:hover {
+            color: #1DA1F2;
+        }
+        
+        .issues-link:hover {
+            color: var(--danger-color);
+        }
+        
+        .blog-link-container {
+            margin-top: 12px;
+        }
+        
+        .blog-link-text {
+            color: var(--secondary-color);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        
+        .blog-link-text:hover {
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -77,16 +209,6 @@
             <div class="header-main">
                 <img src="./assets/nalu.svg" alt="NALU分析器" class="logo">
                 <h1>H.264 NALU 分析器</h1>
-            </div>
-            <div class="header-links">
-                <a href="https://github.com/wbxl2000/h264-nalu-viewer" target="_blank" class="header-link github-link">
-                    <img src="./assets/github.svg" alt="GitHub" class="header-icon">
-                    <span>Start on GitHub</span>
-                </a>
-                <a href="https://x.com/wbxl2000" target="_blank" class="header-link x-link">
-                    <img src="./assets/x.svg" alt="X" class="header-icon">
-                    <span>Follow on X</span>
-                </a>
             </div>
         </div>
 
@@ -172,9 +294,44 @@
                     <h3>十六进制查看器</h3>
                 </div>
                 <div class="hex-content" id="hexContent"></div>
+                
+                <!-- SPS和PPS完整解析结果区域 -->
+                <div class="parameter-sets-content" id="parameterSetsContent" style="display: none;"></div>
             </div>
         </div>
     </div>
+    
+    <div class="footer">
+        <div class="social-container">
+            <h3 class="support-title">喜欢这个工具？</h3>
+            <div class="social-links">
+                <a href="https://github.com/wbxl2000/h264-nalu-viewer" target="_blank" class="github-link">
+                    <svg height="24" viewBox="0 0 16 16" width="24">
+                        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                    </svg>
+                    Star on GitHub
+                </a>
+                <a href="https://x.com/wbxl2000" target="_blank" class="x-link">
+                    <svg height="24" viewBox="0 0 24 24" width="24">
+                        <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path>
+                    </svg>
+                    Follow on X
+                </a>
+                <a href="https://github.com/wbxl2000/h264-nalu-viewer/issues/new" target="_blank" class="issues-link">
+                    <svg height="24" viewBox="0 0 24 24" width="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M21 14l-3 -3h-7a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v10" />
+                        <path d="M14 15v2a1 1 0 0 1 -1 1h-7l-3 3v-10a1 1 0 0 1 1 -1h2" />
+                    </svg>
+                    功能建议
+                </a>
+            </div>
+            <div class="blog-link-container">
+                <a href="https://pcm.qer.im" target="_blank" class="blog-link-text">音频分析工具请访问 pcm.qer.im</a>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="./main.js"></script>
 </body>
 

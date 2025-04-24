@@ -16,8 +16,6 @@ style.textContent = `
     font-size: 12px;
     line-height: 1.4;
     color: var(--text-color);
-    max-height: 400px;
-    overflow-y: auto;
 }
 `;
 document.head.appendChild(style);
@@ -107,6 +105,8 @@ function clearFile() {
     document.getElementById('uploadSection').classList.remove('has-file');
     document.getElementById('naluSequencePanel').style.display = 'none';
     document.getElementById('parameterSetsContent').style.display = 'none';
+    // 隐藏分析卡片
+    document.getElementById('h264Analysis').style.display = 'none';
     // 清理tooltip
     const tooltip = document.querySelector('.nalu-sequence-tooltip');
     if (tooltip) {
@@ -190,6 +190,8 @@ function processH264File() {
         displayNALU(0);
         updateNALUStats(naluStats, nalus.length);
         updateNALUSequence(nalus);
+        // 显示分析卡片
+        document.getElementById('h264Analysis').style.display = 'grid';
     }
 }
 
@@ -772,7 +774,7 @@ function displayParameterSetsInfo(nalu) {
     headerDiv.style.paddingBottom = '10px';
     
     if (nalu.type === 7) { // SPS
-        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--danger-color);">SPS (序列参数集) 完整数据结构</h4>';
+        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--danger-color);">SPS (序列参数集) 完整数据结构 <span style="color:var(--secondary-color);font-size:12px;background-color:#f3f4f6;padding:2px 6px;border-radius:10px;margin-left:6px;">Beta</span></h4><p style="margin-top:5px;color:var(--secondary-color);font-size:13px;">此功能处于测试阶段，如有问题请前往 <a href="https://github.com/wbxl2000/h264-nalu-viewer/issues/new" target="_blank" style="color:var(--primary-color);">GitHub</a> 反馈</p>';
         contentElement.appendChild(headerDiv);
         
         const spsInfo = parseSPSData(nalu.data);
@@ -783,8 +785,6 @@ function displayParameterSetsInfo(nalu) {
             
             const jsonPre = document.createElement('pre');
             jsonPre.className = 'parameter-value';
-            jsonPre.style.maxHeight = '400px';
-            jsonPre.style.overflow = 'auto';
             jsonPre.style.margin = '0';
             jsonPre.textContent = JSON.stringify(spsInfo.rawSpsInfo, null, 2);
             jsonItem.appendChild(jsonPre);
@@ -794,7 +794,7 @@ function displayParameterSetsInfo(nalu) {
             contentElement.innerHTML = '<div class="parameter-item">SPS解析失败</div>';
         }
     } else if (nalu.type === 8) { // PPS
-        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--warning-color);">PPS (图像参数集) 完整数据结构</h4>';
+        headerDiv.innerHTML = '<h4 style="margin-top:0;color:var(--warning-color);">PPS (图像参数集) 完整数据结构 <span style="color:var(--secondary-color);font-size:12px;background-color:#f3f4f6;padding:2px 6px;border-radius:10px;margin-left:6px;">Beta</span></h4><p style="margin-top:5px;color:var(--secondary-color);font-size:13px;">此功能处于测试阶段，如有问题请前往 <a href="https://github.com/wbxl2000/h264-nalu-viewer/issues/new" target="_blank" style="color:var(--primary-color);">GitHub</a> 反馈</p>';
         contentElement.appendChild(headerDiv);
         
         const ppsInfo = parsePPSData(nalu.data);
@@ -805,8 +805,6 @@ function displayParameterSetsInfo(nalu) {
             
             const jsonPre = document.createElement('pre');
             jsonPre.className = 'parameter-value';
-            jsonPre.style.maxHeight = '400px';
-            jsonPre.style.overflow = 'auto';
             jsonPre.style.margin = '0';
             jsonPre.textContent = JSON.stringify(ppsInfo.rawPpsInfo, null, 2);
             jsonItem.appendChild(jsonPre);

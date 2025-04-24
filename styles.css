@@ -215,8 +215,8 @@ body {
     border-radius: 8px;
     padding: 16px;
     min-width: 0;
-    height: 600px;
-    overflow: auto;
+    min-height: 600px;
+    overflow: visible;
 }
 
 .nalu-info-panel {
@@ -226,12 +226,14 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 16px;
-    height: 600px;
-    overflow-y: auto;
+    height: auto;
+    min-height: 600px;
+    overflow-y: visible;
     overflow-x: hidden;
 }
 
-.nalu-info-header {
+.nalu-info-header,
+.hex-viewer-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -241,12 +243,16 @@ body {
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 12px;
     min-height: 40px;
+    height: 46px; /* 固定高度确保对齐 */
+    box-sizing: border-box;
 }
 
-.nalu-info-header h3 {
+.nalu-info-header h3,
+.hex-viewer-header h3 {
     margin: 0;
     color: var(--text-color);
     white-space: nowrap;
+    font-size: 18px;
 }
 
 .nalu-navigation {
@@ -347,14 +353,6 @@ body {
     font-family: monospace, "Courier New", Consolas;
 }
 
-.hex-viewer-header {
-    margin-bottom: 16px;
-    flex-shrink: 0;
-    color: var(--text-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 12px;
-}
-
 .hex-content {
     flex: 1;
     overflow-y: auto;
@@ -443,22 +441,9 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 16px;
-    height: 600px;
+    height: 700px;
     overflow-y: auto;
     overflow-x: hidden;
-}
-
-.hex-viewer-header {
-    margin-bottom: 16px;
-    flex-shrink: 0;
-    color: var(--text-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 12px;
-}
-
-.hex-viewer-header h3 {
-    margin: 0;
-    color: var(--text-color);
 }
 
 .loading-overlay {

@@ -200,6 +200,30 @@
             color: var(--primary-color);
             text-decoration: underline;
         }
+        
+        /* 加载样例按钮样式 */
+        .loading-spinner-btn {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: btn-spin 1s linear infinite;
+            margin-right: 6px;
+            vertical-align: middle;
+            display: none;
+        }
+        
+        @keyframes btn-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .btn-text {
+            vertical-align: middle;
+        }
     </style>
 </head>
 
@@ -222,8 +246,9 @@
                 <button class="control-button" onclick="document.getElementById('fileInput').click()">
                     <span>选择文件</span>
                 </button>
-                <button class="control-button info" onclick="loadSampleFile()">
-                    <span>加载示例</span>
+                <button id="loadSampleBtn" class="control-button info" onclick="loadSampleFile()">
+                    <span class="loading-spinner-btn" id="sampleLoadingSpinner"></span>
+                    <span class="btn-text">加载示例</span>
                 </button>
             </div>
             <div class="file-info" style="display: none;">

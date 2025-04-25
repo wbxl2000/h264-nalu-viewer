@@ -824,6 +824,14 @@ async function loadSampleFile() {
         document.querySelectorAll('.loading-overlay').forEach(overlay => {
             overlay.classList.add('active');
         });
+        
+        // 显示加载样例按钮的loading状态
+        const loadSampleBtn = document.getElementById('loadSampleBtn');
+        const sampleLoadingSpinner = document.getElementById('sampleLoadingSpinner');
+        
+        // 禁用按钮并显示加载动画
+        loadSampleBtn.disabled = true;
+        sampleLoadingSpinner.style.display = 'inline-block';
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -846,6 +854,10 @@ async function loadSampleFile() {
         document.querySelectorAll('.loading-overlay').forEach(overlay => {
             overlay.classList.remove('active');
         });
+        
+        // 恢复按钮状态
+        loadSampleBtn.disabled = false;
+        sampleLoadingSpinner.style.display = 'none';
     } catch (error) {
         console.error('加载示例文件失败:', error);
         alert('加载示例文件失败: ' + error.message);
@@ -853,6 +865,10 @@ async function loadSampleFile() {
         document.querySelectorAll('.loading-overlay').forEach(overlay => {
             overlay.classList.remove('active');
         });
+        
+        // 恢复按钮状态
+        document.getElementById('loadSampleBtn').disabled = false;
+        document.getElementById('sampleLoadingSpinner').style.display = 'none';
     }
 }
 

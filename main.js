@@ -51,8 +51,10 @@ let currentNALUs = [];
 let currentNALUIndex = -1;
 let fileData = null;
 
-// 导入 SPS 解析库
+// 导入 SPS 解析库和解码器
 import spsPpsParser from './js/sps-pps.esm.js';
+import decoder from './js/decoder.js';
+import ffmpegDecoder from './js/ffmpeg-decoder.js';
 
 // 文件处理相关函数
 function formatFileSize(bytes) {
@@ -127,6 +129,10 @@ function processH264File() {
         naluStats[type] = 0;
     });
 
+    // 声明SPS和PPS变量
+    let spsNALU = null;
+    let ppsNALU = null;
+
     while (currentIndex < fileData.length) {
         // 查找起始码
         let startCodeLength = 0;
@@ -167,6 +173,25 @@ function processH264File() {
             // 更新统计信息
             if (naluStats.hasOwnProperty(naluType)) {
                 naluStats[naluType]++;
+            }
+
+            // 保存SPS和PPS，用于后续视频解码
+            if (naluType === 7) { // SPS
+                spsNALU = {
+                    startIndex: currentIndex,
+                    length: naluLength,
+                    startCode: startCodeLength,
+                    type: naluType,
+                    data: naluData
+                };
+            } else if (naluType === 8) { // PPS
+                ppsNALU = {
+                    startIndex: currentIndex,
+                    length: naluLength,
+                    startCode: startCodeLength,
+                    type: naluType,
+                    data: naluData
+                };
             }
 
             nalus.push({
@@ -685,65 +710,119 @@ function updateNALUSequence(nalus) {
     window.addEventListener('scroll', handleScroll);
 }
 
-// 事件监听设置
-document.addEventListener('DOMContentLoaded', () => {
+// 文档加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 文件上传相关
     const fileInput = document.getElementById('fileInput');
-    const uploadSection = document.getElementById('uploadSection');
-    const clearFileButton = document.getElementById('clearFile');
-
+    const dropZone = document.getElementById('uploadSection');
+    const clearFileBtn = document.getElementById('clearFile');
+    
+    // WebCodecs解码相关
+    const decodeButton = document.getElementById('decodeButton');
+    const closeVideoBtn = document.getElementById('closeVideo');
+    
+    // FFmpeg解码相关
+    const ffmpegDecodeButton = document.getElementById('ffmpegDecodeButton');
+    
+    // NALU导航相关
+    const prevNaluBtn = document.getElementById('prevNalu');
+    const nextNaluBtn = document.getElementById('nextNalu');
+    
     fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            handleFile(file);
+        if (e.target.files.length > 0) {
+            handleFile(e.target.files[0]);
         }
     });
-
-    uploadSection.addEventListener('dragover', (e) => {
+    
+    dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        uploadSection.classList.add('drag-over');
+        dropZone.classList.add('drag-over');
     });
-
-    uploadSection.addEventListener('dragleave', () => {
-        uploadSection.classList.remove('drag-over');
-    });
-
-    uploadSection.addEventListener('drop', (e) => {
+    
+    dropZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        uploadSection.classList.remove('drag-over');
-
+        dropZone.classList.remove('drag-over');
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+        
         if (e.dataTransfer.files.length > 0) {
             handleFile(e.dataTransfer.files[0]);
         }
     });
-
-    clearFileButton.addEventListener('click', clearFile);
-
-    document.getElementById('prevNalu').addEventListener('click', () => {
+    
+    clearFileBtn.addEventListener('click', clearFile);
+    
+    // 解码按钮事件
+    if (decodeButton) {
+        decodeButton.addEventListener('click', function() {
+            if (!decoder.checkWebCodecsSupport()) return;
+            
+            if (currentNALUs.length === 0) {
+                alert('请先加载H.264文件');
+                return;
+            }
+            
+            console.log('开始解码整个文件');
+            decoder.decodeEntireFile(currentNALUs, parseSPSData);
+        });
+    }
+    
+    // 关闭视频按钮事件
+    if (closeVideoBtn) {
+        closeVideoBtn.addEventListener('click', decoder.closeVideoPlayer);
+        closeVideoBtn.addEventListener('click', ffmpegDecoder.closeFFmpegPlayer);
+    }
+    
+    // FFmpeg解码按钮事件
+    if (ffmpegDecodeButton) {
+        ffmpegDecodeButton.addEventListener('click', function() {
+            if (currentNALUs.length === 0) {
+                alert('请先加载H.264文件');
+                return;
+            }
+            
+            console.log('开始使用FFmpeg解码整个文件');
+            ffmpegDecoder.decodeH264WithFFmpeg(currentNALUs);
+        });
+    }
+    
+    // NALU导航按钮
+    prevNaluBtn.addEventListener('click', () => {
         if (currentNALUIndex > 0) {
             currentNALUIndex--;
             displayNALU(currentNALUIndex);
-            // 更新序列可视化中的选中状态
-            updateSequenceSelection(currentNALUIndex);
         }
     });
-
-    document.getElementById('nextNalu').addEventListener('click', () => {
+    
+    nextNaluBtn.addEventListener('click', () => {
         if (currentNALUIndex < currentNALUs.length - 1) {
             currentNALUIndex++;
             displayNALU(currentNALUIndex);
-            // 更新序列可视化中的选中状态
-            updateSequenceSelection(currentNALUIndex);
         }
     });
 
-    // 添加大小显示开关事件监听
+    // 大小切换
     document.getElementById('sizeToggle').addEventListener('change', (e) => {
-        if (currentNALUs.length > 0) {
-            updateNALUSequence(currentNALUs);
-        }
+        const showSize = e.target.checked;
+        document.querySelector('.nalu-sequence-content').classList.toggle('show-size', showSize);
+        
+        // 更新所有NALU尺寸显示
+        document.querySelectorAll('.nalu-item').forEach(item => {
+            const size = item.getAttribute('data-size');
+            const sizeSpan = item.querySelector('.nalu-size');
+            if (sizeSpan) {
+                sizeSpan.textContent = showSize ? formatBytes(size) : '';
+            }
+        });
     });
+
+    console.log('页面加载完成，事件监听器已绑定');
 });
 
 // 添加新的辅助函数来更新序列选中状态
@@ -856,7 +935,7 @@ async function loadSampleFile() {
     }
 }
 
-// 将loadSampleFile添加到全局作用域，使其可以从HTML中访问
+// 将loadSampleFile添加到全局作用域
 window.loadSampleFile = loadSampleFile;
 
 // 使用sps-pps库解析SPS数据

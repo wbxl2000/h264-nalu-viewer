@@ -260,7 +260,18 @@
                     <div class="nalu-sequence-stats">
                         平均 IDR 间距: <span id="avgIdrInterval">-</span> 帧
                     </div>
+                    <div class="nalu-player-controls">
+                        <button id="decodeButton" class="control-button">WebCodecs解码</button>
+                        <button id="ffmpegDecodeButton" class="control-button">FFmpeg解码</button>
+                    </div>
                 </div>
+            </div>
+            <div class="video-container" style="display: none;" id="videoContainer">
+                <div class="video-header">
+                    <h3>视频预览</h3>
+                    <button id="closeVideo" class="control-button danger">关闭</button>
+                </div>
+                <canvas id="videoCanvas"></canvas>
             </div>
             <div class="nalu-sequence-overview" id="naluStatsContent">
             </div>
@@ -334,6 +345,11 @@
     </div>
     
     <script type="module" src="./main.js"></script>
+    
+    <!-- FFmpeg相关库 -->
+    <script src="./lib/ffmpeg-core.js"></script>
+    <script src="./lib/ffmpeg.js"></script>
+    <script src="./lib/ffmpeg-util.js"></script>
 </body>
 
 </html>

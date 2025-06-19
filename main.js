@@ -744,6 +744,10 @@ document.addEventListener('DOMContentLoaded', () => {
             updateNALUSequence(currentNALUs);
         }
     });
+
+    // 添加复制按钮事件监听
+    document.getElementById('copyHexBtn').addEventListener('click', copyHexData);
+    document.getElementById('copyAsciiBtn').addEventListener('click', copyAsciiData);
 });
 
 // 添加新的辅助函数来更新序列选中状态
@@ -1176,4 +1180,119 @@ function getProfileName(profile_idc) {
         case 139: return 'Enhanced Multiview Depth High Profile';
         default: return '未知 Profile';
     }
+}
+
+// 复制十六进制数据
+function copyHexData() {
+    if (currentNALUIndex < 0 || !currentNALUs[currentNALUIndex]) {
+        showCopyMessage('copyHexBtn', '没有可复制的数据');
+        return;
+    }
+
+    const nalu = currentNALUs[currentNALUIndex];
+    const data = nalu.data;
+
+    // 将字节数组转换为十六进制字符串（不包含换行符）
+    let hexString = '';
+    for (let i = 0; i < data.length; i++) {
+        hexString += data[i].toString(16).padStart(2, '0').toUpperCase();
+        // 每2个字节添加一个空格（但不换行）
+        if ((i + 1) % 2 === 0 && i < data.length - 1) {
+            hexString += ' ';
+        }
+    }
+
+    // 复制到剪贴板
+    copyToClipboard(hexString.trim()).then(() => {
+        showCopyMessage('copyHexBtn', '十六进制数据已复制');
+    }).catch(err => {
+        console.error('复制失败:', err);
+        showCopyMessage('copyHexBtn', '复制失败');
+    });
+}
+
+// 复制ASCII数据
+function copyAsciiData() {
+    if (currentNALUIndex < 0 || !currentNALUs[currentNALUIndex]) {
+        showCopyMessage('copyAsciiBtn', '没有可复制的数据');
+        return;
+    }
+
+    const nalu = currentNALUs[currentNALUIndex];
+    const data = nalu.data;
+
+    // 将字节数组转换为ASCII字符串（不包含换行符）
+    let asciiString = '';
+    for (let i = 0; i < data.length; i++) {
+        const byte = data[i];
+        // 可打印ASCII字符范围是32-126
+        if (byte >= 32 && byte <= 126) {
+            asciiString += String.fromCharCode(byte);
+        } else {
+            asciiString += '.';
+        }
+    }
+
+    // 复制到剪贴板
+    copyToClipboard(asciiString.trim()).then(() => {
+        showCopyMessage('copyAsciiBtn', 'ASCII数据已复制');
+    }).catch(err => {
+        console.error('复制失败:', err);
+        showCopyMessage('copyAsciiBtn', '复制失败');
+    });
+}
+
+// 通用复制到剪贴板函数
+async function copyToClipboard(text) {
+    // 首先尝试使用现代的 Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch (err) {
+            console.warn('Clipboard API 失败，尝试备用方法:', err);
+        }
+    }
+
+    // 备用方法：使用传统的 document.execCommand
+    return new Promise((resolve, reject) => {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) {
+                resolve();
+            } else {
+                reject(new Error('execCommand 复制失败'));
+            }
+        } catch (err) {
+            document.body.removeChild(textArea);
+            reject(err);
+        }
+    });
+}
+
+// 显示复制成功消息
+function showCopyMessage(buttonId, message) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+
+    // 添加成功样式类并临时更改按钮文本
+    button.classList.add('copy-success');
+    const originalText = button.querySelector('span').textContent;
+    button.querySelector('span').textContent = message;
+
+    // 1.5秒后恢复
+    setTimeout(() => {
+        button.classList.remove('copy-success');
+        button.querySelector('span').textContent = originalText;
+    }, 1500);
 }

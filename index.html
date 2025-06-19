@@ -224,6 +224,25 @@
         .btn-text {
             vertical-align: middle;
         }
+
+        /* 十六进制查看器控制按钮样式 */
+        .hex-viewer-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .hex-viewer-controls .control-button {
+            font-size: 13px;
+            padding: 6px 12px;
+            min-width: auto;
+        }
+
+        /* 复制成功提示样式 */
+        .copy-success {
+            background-color: var(--success-color) !important;
+            color: white !important;
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
 
@@ -318,6 +337,14 @@
                 </div>
                 <div class="hex-viewer-header">
                     <h3>十六进制查看器</h3>
+                    <div class="hex-viewer-controls">
+                        <button id="copyHexBtn" class="control-button">
+                            <span>复制 Hex</span>
+                        </button>
+                        <button id="copyAsciiBtn" class="control-button">
+                            <span>复制 ASCII</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="hex-content" id="hexContent"></div>
                 
